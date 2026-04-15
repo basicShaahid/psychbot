@@ -1,18 +1,21 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import {
-  FaceLandmarker,
-  FilesetResolver,
-} from "@mediapipe/tasks-vision";
+import { FaceLandmarker, FilesetResolver } from "@mediapipe/tasks-vision";
 
 type BlendshapeScore = {
   categoryName: string;
   score: number;
 };
 
+type Point2D = {
+  x: number;
+  y: number;
+};
+
 export default function Home() {
   const videoRef = useRef<HTMLVideoElement | null>(null);
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const faceLandmarkerRef = useRef<FaceLandmarker | null>(null);
   const animationFrameRef = useRef<number | null>(null);
@@ -33,19 +36,16 @@ export default function Home() {
           "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@latest/wasm"
         );
 
-        const faceLandmarker = await FaceLandmarker.createFromOptions(
-          vision,
-          {
-            baseOptions: {
-              modelAssetPath:
-                "https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task",
-            },
-            runningMode: "VIDEO",
-            numFaces: 1,
-            outputFaceBlendshapes: true,
-            outputFacialTransformationMatrixes: true,
-          }
-        );
+        const faceLandmarker = await FaceLandmarker.createFromOptions(vision, {
+          baseOptions: {
+            modelAssetPath:
+              "https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task",
+          },
+          runningMode: "VIDEO",
+          numFaces: 1,
+          outputFaceBlendshapes: true,
+          outputFacialTransformationMatrixes: true,
+        });
 
         faceLandmarkerRef.current = faceLandmarker;
         setModelLoaded(true);
@@ -61,14 +61,10 @@ export default function Home() {
     createFaceLandmarker();
 
     return () => {
-      if (animationFrameRef.current) {
-        cancelAnimationFrame(animationFrameRef.current);
-      }
-
+      if (animationFrameRef.current) cancelAnimationFrame(animationFrameRef.current);
       if (streamRef.current) {
         streamRef.current.getTracks().forEach((track) => track.stop());
       }
-
       faceLandmarkerRef.current?.close();
     };
   }, []);
@@ -82,7 +78,6 @@ export default function Home() {
     const top = sorted[0];
 
     const map: Record<string, string> = {
-      smile: "Happy",
       mouthSmileLeft: "Happy",
       mouthSmileRight: "Happy",
       browInnerUp: "Surprised",
@@ -101,6 +96,34 @@ export default function Home() {
       label: map[top.categoryName] ?? "Neutral / Unclear",
       score: top.score,
     };
+  };
+
+  const drawOverlay = (landmarks: Point2D[] = []) => {
+    const video = videoRef.current;
+    const canvas = canvasRef.current;
+
+    if (!video || !canvas) return;
+
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+
+    const width = video.videoWidth || 1280;
+    const height = video.videoHeight || 720;
+
+    canvas.width = width;
+    canvas.height = height;
+
+    ctx.clearRect(0, 0, width, height);
+
+    if (!landmarks.length) return;
+
+    ctx.fillStyle = "rgba(255,255,255,0.85)";
+
+    for (const point of landmarks) {
+      ctx.beginPath();
+      ctx.arc(point.x * width, point.y * height, 1.5, 0, Math.PI * 2);
+      ctx.fill();
+    }
   };
 
   const predictLoop = () => {
@@ -133,6 +156,9 @@ export default function Home() {
       setExpression(inferred.label);
       setConfidence(`${Math.round(inferred.score * 100)}%`);
       setStatus(results.faceLandmarks?.length ? "Face detected" : "Scanning...");
+
+      const landmarks = results.faceLandmarks?.[0] ?? [];
+      drawOverlay(landmarks);
     }
 
     animationFrameRef.current = requestAnimationFrame(predictLoop);
@@ -184,6 +210,12 @@ export default function Home() {
       videoRef.current.srcObject = null;
     }
 
+    const canvas = canvasRef.current;
+    const ctx = canvas?.getContext("2d");
+    if (canvas && ctx) {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+    }
+
     setCameraOn(false);
     setExpression(modelLoaded ? "No face detected" : "Waiting for model");
     setConfidence("0%");
@@ -203,21 +235,29 @@ export default function Home() {
 
         <div className="grid gap-6 lg:grid-cols-[2fr_1fr]">
           <div className="overflow-hidden rounded-3xl border border-zinc-800 bg-zinc-950 shadow-2xl">
-            <div className="flex aspect-video w-full items-center justify-center bg-zinc-900">
+            <div className="relative aspect-video w-full bg-zinc-900">
               {cameraOn ? (
-                <video
-                  ref={videoRef}
-                  autoPlay
-                  playsInline
-                  muted
-                  className="h-full w-full object-cover"
-                />
+                <>
+                  <video
+                    ref={videoRef}
+                    autoPlay
+                    playsInline
+                    muted
+                    className="h-full w-full object-cover"
+                  />
+                  <canvas
+                    ref={canvasRef}
+                    className="pointer-events-none absolute inset-0 h-full w-full"
+                  />
+                </>
               ) : (
-                <div className="text-center">
-                  <p className="text-xl font-medium">Camera preview</p>
-                  <p className="mt-2 text-sm text-zinc-500">
-                    Start the camera to begin
-                  </p>
+                <div className="flex h-full items-center justify-center text-center">
+                  <div>
+                    <p className="text-xl font-medium">Camera preview</p>
+                    <p className="mt-2 text-sm text-zinc-500">
+                      Start the camera to begin
+                    </p>
+                  </div>
                 </div>
               )}
             </div>
@@ -249,9 +289,7 @@ export default function Home() {
                     {topSignals.map((item) => (
                       <div key={item.categoryName}>
                         <div className="mb-1 flex items-center justify-between text-sm">
-                          <span className="truncate pr-3">
-                            {item.categoryName}
-                          </span>
+                          <span className="truncate pr-3">{item.categoryName}</span>
                           <span>{Math.round(item.score * 100)}%</span>
                         </div>
                         <div className="h-2 rounded-full bg-zinc-800">
@@ -264,9 +302,7 @@ export default function Home() {
                     ))}
                   </div>
                 ) : (
-                  <p className="text-sm text-zinc-500">
-                    No signals yet
-                  </p>
+                  <p className="text-sm text-zinc-500">No signals yet</p>
                 )}
               </div>
             </div>
