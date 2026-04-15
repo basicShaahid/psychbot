@@ -325,7 +325,7 @@ export default function Home() {
 
             {error && <p className="mt-4 text-sm text-red-400">{error}</p>}
           </aside>
-        </div>
+        </div> 
       </section>
     </main>
   );
