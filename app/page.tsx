@@ -20,6 +20,7 @@ export default function Home() {
   const faceLandmarkerRef = useRef<FaceLandmarker | null>(null);
   const animationFrameRef = useRef<number | null>(null);
   const lastVideoTimeRef = useRef(-1);
+  const smoothedScoresRef = useRef<Record<string, number>>({});
 
   const [cameraOn, setCameraOn] = useState(false);
   const [modelLoaded, setModelLoaded] = useState(false);
@@ -28,6 +29,7 @@ export default function Home() {
   const [confidence, setConfidence] = useState("0%");
   const [status, setStatus] = useState("Loading model...");
   const [topSignals, setTopSignals] = useState<BlendshapeScore[]>([]);
+  const [expressionScores, setExpressionScores] = useState<{ label: string; score: number }[]>([]);
 
   useEffect(() => {
     const createFaceLandmarker = async () => {
@@ -69,33 +71,115 @@ export default function Home() {
     };
   }, []);
 
+  const getScore = (shapes: BlendshapeScore[], name: string) => {
+    return shapes.find((s) => s.categoryName === name)?.score ?? 0;
+  };
+
   const mapBlendshapeToExpression = (shapes: BlendshapeScore[]) => {
     if (!shapes.length) {
-      return { label: "No face detected", score: 0 };
+      return {
+        top: { label: "No face detected", score: 0 },
+        scores: [],
+      };
     }
 
-    const sorted = [...shapes].sort((a, b) => b.score - a.score);
-    const top = sorted[0];
+    const happy =
+      getScore(shapes, "mouthSmileLeft") * 1.0 +
+      getScore(shapes, "mouthSmileRight") * 1.0 +
+      getScore(shapes, "cheekSquintLeft") * 0.4 +
+      getScore(shapes, "cheekSquintRight") * 0.4;
 
-    const map: Record<string, string> = {
-      mouthSmileLeft: "Happy",
-      mouthSmileRight: "Happy",
-      browInnerUp: "Surprised",
-      eyeWideLeft: "Surprised",
-      eyeWideRight: "Surprised",
-      jawOpen: "Surprised",
-      mouthFrownLeft: "Sad",
-      mouthFrownRight: "Sad",
-      browDownLeft: "Angry",
-      browDownRight: "Angry",
-      noseSneerLeft: "Disgust",
-      noseSneerRight: "Disgust",
+    const surprised =
+      getScore(shapes, "jawOpen") * 0.35 +
+      getScore(shapes, "browInnerUp") * 0.9 +
+      getScore(shapes, "eyeWideLeft") * 0.8 +
+      getScore(shapes, "eyeWideRight") * 0.8 +
+      getScore(shapes, "mouthFunnel") * 0.35 +
+      getScore(shapes, "mouthPucker") * 0.2;
+
+    const sad =
+      getScore(shapes, "mouthFrownLeft") * 1.15 +
+      getScore(shapes, "mouthFrownRight") * 1.15 +
+      getScore(shapes, "mouthLowerDownLeft") * 0.55 +
+      getScore(shapes, "mouthLowerDownRight") * 0.55 +
+      getScore(shapes, "browInnerUp") * 0.55 -
+      getScore(shapes, "eyeSquintLeft") * 0.2 -
+      getScore(shapes, "eyeSquintRight") * 0.2;
+
+    const angry =
+      getScore(shapes, "browDownLeft") * 0.75 +
+      getScore(shapes, "browDownRight") * 0.75 +
+      getScore(shapes, "eyeSquintLeft") * 0.2 +
+      getScore(shapes, "eyeSquintRight") * 0.2 +
+      getScore(shapes, "jawOpen") * 0.08 -
+      getScore(shapes, "mouthFrownLeft") * 0.25 -
+      getScore(shapes, "mouthFrownRight") * 0.25 -
+      getScore(shapes, "mouthLowerDownLeft") * 0.15 -
+      getScore(shapes, "mouthLowerDownRight") * 0.15;
+
+    const disgust =
+      getScore(shapes, "noseSneerLeft") * 1.2 +
+      getScore(shapes, "noseSneerRight") * 1.2 +
+      getScore(shapes, "mouthUpperUpLeft") * 0.75 +
+      getScore(shapes, "mouthUpperUpRight") * 0.75 +
+      getScore(shapes, "browDownLeft") * 0.15 +
+      getScore(shapes, "browDownRight") * 0.15 -
+      getScore(shapes, "mouthSmileLeft") * 0.2 -
+      getScore(shapes, "mouthSmileRight") * 0.2;
+
+    const scoresRaw: Record<string, number> = {
+      Happy: Math.max(0, happy),
+      Surprised: Math.max(0, surprised),
+      Sad: Math.max(0, sad),
+      Angry: Math.max(0, angry),
+      Disgust: Math.max(0, disgust),
     };
 
-    return {
-      label: map[top.categoryName] ?? "Neutral / Unclear",
-      score: top.score,
+    const strongestEmotion = Math.max(...Object.values(scoresRaw));
+    const neutral = Math.max(0, 0.85 - strongestEmotion * 0.9);
+
+    const rawScores: Record<string, number> = {
+      ...scoresRaw,
+      Neutral: neutral,
     };
+
+    const alpha = 0.55;
+
+    for (const key of Object.keys(rawScores)) {
+      const previous = smoothedScoresRef.current[key] ?? rawScores[key];
+      smoothedScoresRef.current[key] =
+        previous * alpha + rawScores[key] * (1 - alpha);
+    }
+
+    const scores = Object.entries(smoothedScoresRef.current)
+      .map(([label, score]) => ({ label, score }))
+      .sort((a, b) => b.score - a.score);
+
+    const top = scores[0];
+    const second = scores[1];
+
+    if (!top) {
+      return {
+        top: { label: "Neutral / Unclear", score: 0 },
+        scores,
+      };
+    }
+
+    if (top.label !== "Neutral" && top.score < 0.22) {
+      return {
+        top: { label: "Neutral / Unclear", score: top.score },
+        scores,
+      };
+    }
+
+    if (second && top.label !== "Neutral" && top.score - second.score < 0.03) {
+      return {
+        top: { label: "Neutral / Unclear", score: top.score },
+        scores,
+      };
+    }
+
+    return { top, scores };
   };
 
   const drawOverlay = (landmarks: Point2D[] = []) => {
@@ -153,8 +237,9 @@ export default function Home() {
       setTopSignals(topThree);
 
       const inferred = mapBlendshapeToExpression(simplifiedShapes);
-      setExpression(inferred.label);
-      setConfidence(`${Math.round(inferred.score * 100)}%`);
+      setExpression(inferred.top.label);
+      setConfidence(`${Math.round(inferred.top.score * 100)}%`);
+      setExpressionScores(inferred.scores.slice(0, 5));
       setStatus(results.faceLandmarks?.length ? "Face detected" : "Scanning...");
 
       const landmarks = results.faceLandmarks?.[0] ?? [];
@@ -216,10 +301,12 @@ export default function Home() {
       ctx.clearRect(0, 0, canvas.width, canvas.height);
     }
 
+    smoothedScoresRef.current = {};
     setCameraOn(false);
     setExpression(modelLoaded ? "No face detected" : "Waiting for model");
     setConfidence("0%");
     setTopSignals([]);
+    setExpressionScores([]);
     setStatus(modelLoaded ? "Idle" : "Loading model...");
   };
 
@@ -354,6 +441,39 @@ export default function Home() {
                   {error}
                 </div>
               )}
+            </div>
+
+            <div className="rounded-[28px] border border-white/10 bg-black/40 p-5 backdrop-blur-md">
+              <p className="text-xs uppercase tracking-[0.3em] text-zinc-500">
+                Expression Scores
+              </p>
+
+              <div className="mt-5 space-y-4">
+                {expressionScores.length > 0 ? (
+                  expressionScores.map((item) => (
+                    <div key={item.label}>
+                      <div className="mb-2 flex items-center justify-between text-sm">
+                        <span className="max-w-[75%] truncate text-zinc-300">
+                          {item.label}
+                        </span>
+                        <span className="text-cyan-300">
+                          {Math.round(item.score * 100)}%
+                        </span>
+                      </div>
+                      <div className="h-2 overflow-hidden rounded-full bg-white/10">
+                        <div
+                          className="h-2 rounded-full bg-gradient-to-r from-cyan-400 to-blue-400"
+                          style={{ width: `${Math.max(0, Math.min(100, item.score * 100))}%` }}
+                        />
+                      </div>
+                    </div>
+                  ))
+                ) : (
+                  <p className="text-sm text-zinc-500">
+                    Waiting for expression scores.
+                  </p>
+                )}
+              </div>
             </div>
 
             <div className="rounded-[28px] border border-white/10 bg-black/40 p-5 backdrop-blur-md">
