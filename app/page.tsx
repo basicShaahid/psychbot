@@ -117,11 +117,11 @@ export default function Home() {
 
     if (!landmarks.length) return;
 
-    ctx.fillStyle = "rgba(255,255,255,0.85)";
+    ctx.fillStyle = "rgba(0, 255, 170, 0.92)";
 
     for (const point of landmarks) {
       ctx.beginPath();
-      ctx.arc(point.x * width, point.y * height, 1.5, 0, Math.PI * 2);
+      ctx.arc(point.x * width, point.y * height, 1.4, 0, Math.PI * 2);
       ctx.fill();
     }
   };
@@ -223,110 +223,211 @@ export default function Home() {
     setStatus(modelLoaded ? "Idle" : "Loading model...");
   };
 
-  return (
-    <main className="min-h-screen bg-black px-6 py-10 text-white">
-      <section className="mx-auto max-w-6xl">
-        <div className="mb-8 space-y-3 text-center">
-          <h1 className="text-5xl font-bold tracking-tight">PsychBot</h1>
-          <p className="text-lg text-zinc-400">
-            Real-time facial expression tracking from your webcam
-          </p>
-        </div>
+  const statusColor =
+    status === "Face detected"
+      ? "text-emerald-400"
+      : status.includes("error")
+      ? "text-red-400"
+      : "text-cyan-300";
 
-        <div className="grid gap-6 lg:grid-cols-[2fr_1fr]">
-          <div className="overflow-hidden rounded-3xl border border-zinc-800 bg-zinc-950 shadow-2xl">
-            <div className="relative aspect-video w-full bg-zinc-900">
-              {cameraOn ? (
-                <>
-                  <video
-                    ref={videoRef}
-                    autoPlay
-                    playsInline
-                    muted
-                    className="h-full w-full object-cover"
-                  />
-                  <canvas
-                    ref={canvasRef}
-                    className="pointer-events-none absolute inset-0 h-full w-full"
-                  />
-                </>
-              ) : (
-                <div className="flex h-full items-center justify-center text-center">
-                  <div>
-                    <p className="text-xl font-medium">Camera preview</p>
-                    <p className="mt-2 text-sm text-zinc-500">
-                      Start the camera to begin
-                    </p>
-                  </div>
-                </div>
-              )}
-            </div>
+  return (
+    <main className="min-h-screen overflow-hidden bg-[#030712] text-white">
+      <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(0,255,170,0.08),transparent_30%),radial-gradient(circle_at_bottom_right,rgba(34,211,238,0.08),transparent_25%)]" />
+      <div className="absolute inset-0 opacity-[0.08] [background-image:linear-gradient(rgba(255,255,255,0.14)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.14)_1px,transparent_1px)] [background-size:36px_36px]" />
+
+      <section className="relative z-10 mx-auto max-w-7xl px-6 py-8">
+        <header className="mb-8 flex flex-col gap-4 border-b border-white/10 pb-6 lg:flex-row lg:items-end lg:justify-between">
+          <div>
+            <p className="mb-2 text-xs uppercase tracking-[0.35em] text-emerald-400/80">
+              Experimental Emotion Interface
+            </p>
+            <h1 className="text-4xl font-semibold tracking-tight sm:text-6xl">
+              PsychBot
+            </h1>
+            <p className="mt-3 max-w-2xl text-sm text-zinc-400 sm:text-base">
+              Real-time facial expression analysis with local webcam processing,
+              live blendshape signals, and face landmark tracking.
+            </p>
           </div>
 
-          <aside className="rounded-3xl border border-zinc-800 bg-zinc-950 p-6">
-            <h2 className="mb-6 text-xl font-semibold">Live Analysis</h2>
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+            <TopChip label="Model" value={modelLoaded ? "ONLINE" : "BOOTING"} />
+            <TopChip label="Camera" value={cameraOn ? "LIVE" : "OFF"} />
+            <TopChip label="Faces" value={cameraOn ? "01" : "00"} />
+            <TopChip label="Mode" value="LOCAL" />
+          </div>
+        </header>
 
-            <div className="space-y-4">
-              <div className="rounded-2xl border border-zinc-800 bg-zinc-900 p-4">
-                <p className="text-sm text-zinc-400">Current Expression</p>
-                <p className="mt-2 text-2xl font-semibold">{expression}</p>
+        <div className="grid gap-6 xl:grid-cols-[1.7fr_0.9fr]">
+          <div className="rounded-[28px] border border-emerald-500/20 bg-black/40 p-4 shadow-[0_0_40px_rgba(16,185,129,0.08)] backdrop-blur-md">
+            <div className="mb-4 flex items-center justify-between rounded-2xl border border-white/10 bg-white/5 px-4 py-3">
+              <div>
+                <p className="text-xs uppercase tracking-[0.25em] text-zinc-500">
+                  Vision Feed
+                </p>
+                <p className="mt-1 text-sm text-zinc-300">
+                  Face mesh overlay and live capture stream
+                </p>
+              </div>
+              <div className={`text-sm font-medium ${statusColor}`}>{status}</div>
+            </div>
+
+            <div className="relative overflow-hidden rounded-[24px] border border-white/10 bg-[#02040a]">
+              <div className="absolute left-4 top-4 z-20 rounded-full border border-emerald-400/30 bg-black/60 px-3 py-1 text-xs uppercase tracking-[0.2em] text-emerald-300 backdrop-blur">
+                {cameraOn ? "Camera Active" : "Camera Standby"}
               </div>
 
-              <div className="rounded-2xl border border-zinc-800 bg-zinc-900 p-4">
-                <p className="text-sm text-zinc-400">Confidence</p>
-                <p className="mt-2 text-2xl font-semibold">{confidence}</p>
+              <div className="absolute right-4 top-4 z-20 rounded-full border border-cyan-400/30 bg-black/60 px-3 py-1 text-xs uppercase tracking-[0.2em] text-cyan-300 backdrop-blur">
+                {confidence}
               </div>
 
-              <div className="rounded-2xl border border-zinc-800 bg-zinc-900 p-4">
-                <p className="text-sm text-zinc-400">System Status</p>
-                <p className="mt-2 text-2xl font-semibold">{status}</p>
-              </div>
-
-              <div className="rounded-2xl border border-zinc-800 bg-zinc-900 p-4">
-                <p className="mb-3 text-sm text-zinc-400">Top Face Signals</p>
-                {topSignals.length > 0 ? (
-                  <div className="space-y-3">
-                    {topSignals.map((item) => (
-                      <div key={item.categoryName}>
-                        <div className="mb-1 flex items-center justify-between text-sm">
-                          <span className="truncate pr-3">{item.categoryName}</span>
-                          <span>{Math.round(item.score * 100)}%</span>
-                        </div>
-                        <div className="h-2 rounded-full bg-zinc-800">
-                          <div
-                            className="h-2 rounded-full bg-white"
-                            style={{ width: `${item.score * 100}%` }}
-                          />
-                        </div>
-                      </div>
-                    ))}
-                  </div>
+              <div className="relative aspect-video w-full bg-black">
+                {cameraOn ? (
+                  <>
+                    <video
+                      ref={videoRef}
+                      autoPlay
+                      playsInline
+                      muted
+                      className="h-full w-full object-cover opacity-85"
+                    />
+                    <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_center,transparent_35%,rgba(0,0,0,0.35)_100%)]" />
+                    <canvas
+                      ref={canvasRef}
+                      className="pointer-events-none absolute inset-0 h-full w-full"
+                    />
+                  </>
                 ) : (
-                  <p className="text-sm text-zinc-500">No signals yet</p>
+                  <div className="flex h-full items-center justify-center">
+                    <div className="text-center">
+                      <p className="text-xl font-medium text-white">Feed Offline</p>
+                      <p className="mt-2 text-sm text-zinc-500">
+                        Initialize the camera to begin live analysis
+                      </p>
+                    </div>
+                  </div>
                 )}
               </div>
             </div>
 
-            <div className="mt-6 flex flex-wrap gap-3">
-              <button
-                onClick={startCamera}
-                className="rounded-2xl border border-zinc-700 px-5 py-3 transition hover:bg-zinc-900"
-              >
-                Start Camera
-              </button>
+            <div className="mt-4 grid gap-3 sm:grid-cols-3">
+              <MetricCard label="Expression" value={expression} />
+              <MetricCard label="Confidence" value={confidence} />
+              <MetricCard label="Status" value={status} valueClassName={statusColor} />
+            </div>
+          </div>
 
-              <button
-                onClick={stopCamera}
-                className="rounded-2xl border border-zinc-700 px-5 py-3 transition hover:bg-zinc-900"
-              >
-                Stop Camera
-              </button>
+          <aside className="space-y-6">
+            <div className="rounded-[28px] border border-cyan-500/20 bg-black/40 p-5 shadow-[0_0_40px_rgba(34,211,238,0.06)] backdrop-blur-md">
+              <p className="text-xs uppercase tracking-[0.3em] text-cyan-300/80">
+                Control Panel
+              </p>
+
+              <div className="mt-5 grid gap-3">
+                <button
+                  onClick={startCamera}
+                  className="rounded-2xl border border-emerald-400/30 bg-emerald-500/10 px-5 py-3 text-left transition hover:border-emerald-300/50 hover:bg-emerald-400/15"
+                >
+                  <span className="block text-sm font-semibold text-emerald-300">
+                    Start Camera
+                  </span>
+                  <span className="mt-1 block text-xs text-zinc-400">
+                    Activate feed and begin face tracking
+                  </span>
+                </button>
+
+                <button
+                  onClick={stopCamera}
+                  className="rounded-2xl border border-red-400/20 bg-red-500/5 px-5 py-3 text-left transition hover:border-red-300/40 hover:bg-red-400/10"
+                >
+                  <span className="block text-sm font-semibold text-red-300">
+                    Stop Camera
+                  </span>
+                  <span className="mt-1 block text-xs text-zinc-400">
+                    Shutdown stream and clear active overlay
+                  </span>
+                </button>
+              </div>
+
+              {error && (
+                <div className="mt-4 rounded-2xl border border-red-400/20 bg-red-500/10 p-3 text-sm text-red-300">
+                  {error}
+                </div>
+              )}
             </div>
 
-            {error && <p className="mt-4 text-sm text-red-400">{error}</p>}
+            <div className="rounded-[28px] border border-white/10 bg-black/40 p-5 backdrop-blur-md">
+              <p className="text-xs uppercase tracking-[0.3em] text-zinc-500">
+                Signal Breakdown
+              </p>
+
+              <div className="mt-5 space-y-4">
+                {topSignals.length > 0 ? (
+                  topSignals.map((item) => (
+                    <div key={item.categoryName}>
+                      <div className="mb-2 flex items-center justify-between text-sm">
+                        <span className="max-w-[75%] truncate text-zinc-300">
+                          {item.categoryName}
+                        </span>
+                        <span className="text-emerald-300">
+                          {Math.round(item.score * 100)}%
+                        </span>
+                      </div>
+                      <div className="h-2 overflow-hidden rounded-full bg-white/10">
+                        <div
+                          className="h-2 rounded-full bg-gradient-to-r from-emerald-400 to-cyan-400"
+                          style={{ width: `${item.score * 100}%` }}
+                        />
+                      </div>
+                    </div>
+                  ))
+                ) : (
+                  <p className="text-sm text-zinc-500">
+                    Awaiting signal input from live capture.
+                  </p>
+                )}
+              </div>
+            </div>
+
+            <div className="rounded-[28px] border border-white/10 bg-black/40 p-5 backdrop-blur-md">
+              <p className="text-xs uppercase tracking-[0.3em] text-zinc-500">
+                Session Notes
+              </p>
+              <div className="mt-4 space-y-3 text-sm text-zinc-400">
+                <p>• Processing is local to the browser session.</p>
+                <p>• Face label is an expression estimate, not mind-reading.</p>
+                <p>• Best results come from front-facing light and one visible face.</p>
+              </div>
+            </div>
           </aside>
-        </div> 
+        </div>
       </section>
     </main>
+  );
+}
+
+function TopChip({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 backdrop-blur">
+      <p className="text-[10px] uppercase tracking-[0.25em] text-zinc-500">{label}</p>
+      <p className="mt-1 text-sm font-semibold text-white">{value}</p>
+    </div>
+  );
+}
+
+function MetricCard({
+  label,
+  value,
+  valueClassName = "text-white",
+}: {
+  label: string;
+  value: string;
+  valueClassName?: string;
+}) {
+  return (
+    <div className="rounded-2xl border border-white/10 bg-white/5 p-4 backdrop-blur">
+      <p className="text-xs uppercase tracking-[0.22em] text-zinc-500">{label}</p>
+      <p className={`mt-2 text-lg font-semibold ${valueClassName}`}>{value}</p>
+    </div>
   );
 }
